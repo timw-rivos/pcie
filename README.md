@@ -1,2 +1,2 @@
 # pcie
-PCIe scanning and enumeration
+PCIe scanning and enumeration library
