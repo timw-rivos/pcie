@@ -697,17 +697,16 @@ impl<'a> Device<'a> {
             let (base, max_offset) = if is_64b {
                 let base_hi = self.cfg_read32(entry_base + 12);
                 let max_offset_hi = self.cfg_read32(entry_base + 16);
-                entry_base += 20;
                 (
                     (base_lo & !3) as u64 | (base_hi as u64) << 32,
                     (max_offset_lo | 3) as u64 | (max_offset_hi as u64) << 32,
                 )
             } else {
-                entry_base += 12;
-                ((base_lo & !3) as u64, (max_offset_lo & !3) as u64)
+                ((base_lo & !3) as u64, (max_offset_lo | 3) as u64)
             };
 
             let entry_info = self.cfg_read32(entry_base);
+            let entry_size = entry_info & 0x7;
             // BAR entry index
             let bei = entry_info >> 4 & 0xf;
             let enabled = entry_info >> 31;
@@ -720,9 +719,11 @@ impl<'a> Device<'a> {
                 ResourceType::Memory32
             };
 
+            entry_base += (entry_size * 4) as u16;
+
             // Only add BARs 0-5
             if bei <= 5 && enabled == 1 {
-                let size = max_offset - base + 1;
+                let size = max_offset + 1;
                 self.resources[bei as usize] = Some(Resource {
                     bdf: self.bdf,
                     idx: BARS[bei as usize],
@@ -730,7 +731,7 @@ impl<'a> Device<'a> {
                     base: Some(base),
                     size,
                     alignment: size,
-                    limit: max_offset,
+                    limit: base + max_offset,
                     prefetchable: props == 1,
                     bridge: false,
                 });
