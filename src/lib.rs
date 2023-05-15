@@ -28,14 +28,6 @@ const MAX_BUS: Bus = Bus(255);
 const MAX_DEV: Dev = Dev(31);
 const MAX_FUNC: Func = Func(7);
 
-fn align_up(value: u64, alignment: u64) -> u64 {
-    if value == 0 {
-        0
-    } else {
-        ((value - 1) / alignment + 1) * alignment
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Description {
     Unknown,
@@ -171,14 +163,13 @@ impl PciEcamCfgOps {
         self.base.store(new_base as usize, Ordering::Release);
     }
 
-    fn addr(&self, bdf: &Bdf, register: u16) -> *mut u8 {
+    fn addr(&self, bdf: &Bdf, register: u16) -> usize {
         self.base
             .load(Ordering::Acquire)
             .wrapping_add((bdf.bus.val() as usize) << 20)
             .wrapping_add((bdf.dev.val() as usize) << 15)
             .wrapping_add((bdf.func.val() as usize) << 12)
             .wrapping_add(register as usize)
-            as *mut u8
     }
 
     fn read8(&self, bdf: &Bdf, register: u16) -> u8 {
@@ -194,7 +185,7 @@ impl PciEcamCfgOps {
     }
 
     fn write8(&self, bdf: &Bdf, register: u16, value: u8) {
-        unsafe { core::ptr::write_volatile(self.addr(bdf, register), value) }
+        unsafe { core::ptr::write_volatile(self.addr(bdf, register) as *mut u8, value) }
     }
 
     fn write16(&self, bdf: &Bdf, register: u16, value: u16) {
@@ -448,13 +439,13 @@ impl<'a> Device<'a> {
     // flatten() doesn't return mutable data
     #[allow(clippy::manual_flatten)]
     // Set the base of a given resource (in memory only)
-    pub fn assign_resource(&mut self, idx: Register, base: u64) {
+    pub fn assign_resource(&mut self, res: &Resource) {
         let mut assigned = false;
 
-        for mut resource in self.resources {
-            if let Some(ref mut resource) = resource {
-                if idx == resource.idx {
-                    resource.base = Some(base);
+        for resource in &mut self.resources {
+            if resource.is_some() {
+                if res.idx == resource.unwrap().idx {
+                    *resource = Some(*res);
                     assigned = true;
                     break;
                 }
@@ -468,10 +459,27 @@ impl<'a> Device<'a> {
 
     // Write all of the resources to config space
     pub fn store_resources(&self) {
-        match self.header {
-            HeaderType::Normal => {
-                for resource in self.resources.iter().flatten() {
-                    if let Some(base) = resource.base {
+        // Device BARs are simpler, handle them early.
+        if !self.is_bridge() {
+            for resource in self.resources.iter().flatten() {
+                if let Some(base) = resource.base {
+                    let base_lo = (base & 0xffff_ffff) as u32;
+                    self.cfg_write32(resource.idx as u16, base_lo);
+
+                    if matches!(resource.ty, ResourceType::Memory64) {
+                        let base_hi = ((base >> 32) & 0xffff_ffff) as u32;
+                        self.cfg_write32(resource.idx as u16 + 4, base_hi);
+                    }
+                }
+            }
+
+            return;
+        }
+
+        for resource in self.resources[0..2].iter().flatten() {
+            if let Some(base) = resource.base {
+                match resource.idx {
+                    Register::Bar0 => {
                         let base_lo = (base & 0xffff_ffff) as u32;
                         self.cfg_write32(resource.idx as u16, base_lo);
 
@@ -480,37 +488,40 @@ impl<'a> Device<'a> {
                             self.cfg_write32(resource.idx as u16 + 4, base_hi);
                         }
                     }
-                }
-            }
-            HeaderType::Bridge => {
-                for resource in self.resources[0..2].iter().flatten() {
-                    let (base, end) = if let Some(base) = resource.base {
-                        (base, base + align_up(resource.size, resource.alignment) - 1)
-                    } else {
-                        // NOTE: PCI bridges have no enable bit, instead the disable
-                        // logic is active if the base is greater than the end.
-                        // A safe strategy is then to set the base to the limit,
-                        // and the end to the limit minus 1 alignment.
-                        (resource.limit, resource.limit - resource.alignment)
-                    };
-
-                    match resource.idx {
-                        Register::MemoryBase => {
-                            self.cfg_write16(Register::MemoryBase as u16, (base >> 16) as u16);
-                            self.cfg_write16(Register::MemoryLimit as u16, (end >> 16) as u16);
-                        }
-                        Register::PrefMemBase => {
-                            self.cfg_write16(Register::PrefMemBase as u16, (base >> 16) as u16);
-                            self.cfg_write32(Register::PrefBaseUpper as u16, (base >> 32) as u32);
-                            self.cfg_write16(Register::PrefMemLimit as u16, (end >> 16) as u16);
-                            self.cfg_write32(Register::PrefLimitUpper as u16, (end >> 32) as u32);
-                        }
-                        _ => panic!("Invalid idx in store_resources!"),
+                    Register::Bar1 => {
+                        let base_lo = (base & 0xffff_ffff) as u32;
+                        self.cfg_write32(resource.idx as u16, base_lo);
                     }
+                    _ => panic!("Bug in pcie library!"),
                 }
             }
-            // Cardbus Bridge type not supported
-            _ => (),
+        }
+
+        // NOTE: PCI bridge resources have no enable bit,
+        // instead the disable logic is active if the base is
+        // greater than the end. A safe strategy is then to
+        // set the base to the limit, and the end to the limit
+        // minus 1 alignment.
+        for resource in self.resources[2..4].iter().flatten() {
+            let (base, end) = if let Some(base) = resource.base {
+                (base, resource.limit)
+            } else {
+                (resource.limit - resource.alignment, resource.limit)
+            };
+
+            match resource.idx {
+                Register::MemoryBase => {
+                    self.cfg_write16(Register::MemoryBase as u16, (base >> 16) as u16);
+                    self.cfg_write16(Register::MemoryLimit as u16, (end >> 16) as u16);
+                }
+                Register::PrefMemBase => {
+                    self.cfg_write16(Register::PrefMemBase as u16, (base >> 16) as u16);
+                    self.cfg_write32(Register::PrefBaseUpper as u16, (base >> 32) as u32);
+                    self.cfg_write16(Register::PrefMemLimit as u16, (end >> 16) as u16);
+                    self.cfg_write32(Register::PrefLimitUpper as u16, (end >> 32) as u32);
+                }
+                _ => panic!("Bug in pcie library!"),
+            }
         }
     }
 
@@ -724,21 +735,27 @@ impl<'a> Device<'a> {
             // Only add BARs 0-5
             if bei <= 5 && enabled == 1 {
                 let size = max_offset + 1;
-                self.resources[bei as usize] = Some(Resource {
-                    bdf: self.bdf,
-                    idx: BARS[bei as usize],
-                    ty,
-                    base: Some(base),
-                    size,
-                    alignment: size,
-                    limit: base + max_offset,
-                    prefetchable: props == 1,
-                    bridge: false,
-                });
+                if size > 0 {
+                    self.resources[bei as usize] = Some(Resource {
+                        bdf: self.bdf,
+                        idx: BARS[bei as usize],
+                        ty,
+                        base: Some(base),
+                        size,
+                        alignment: size,
+                        limit: base + max_offset,
+                        prefetchable: props == 1,
+                        bridge: false,
+                    });
+                }
             }
         }
     }
 
+    // Bridges have extra "resources" which are ranges of address space
+    // decoded to the downstream buses; one for non-prefetchable areas,
+    // which only has 32 bits of space, and one which is prefetchable,
+    // which has 64 bits of space
     fn read_bridge_resources(&mut self) {
         // Check for a non-prefetchable memory region
         if let Some((alignment, limit)) = {
@@ -921,7 +938,7 @@ impl<'a> Device<'a> {
         })
     }
 
-    fn is_bridge(&self) -> bool {
+    pub fn is_bridge(&self) -> bool {
         self.header == HeaderType::Bridge
     }
 }
