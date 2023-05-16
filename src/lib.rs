@@ -1039,12 +1039,13 @@ fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
 // Returns the subordinate bus number
 pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> u8 {
     let mut highest_bus = bus;
+    let mut next_bus = next_bus;
 
     for device in all_local_devices(bus, ops) {
         if device.is_bridge() {
-            let next_bus = highest_bus + 1;
             let highest_downstream = bridge_route(ops, bus, next_bus, &device);
             highest_bus = u8::max(highest_bus, highest_downstream);
+            next_bus = highest_bus + 1;
         }
     }
 
