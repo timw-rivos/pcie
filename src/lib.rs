@@ -1003,7 +1003,7 @@ impl<'a> core::iter::Iterator for DeviceIterator<'a> {
     }
 }
 
-fn bridge_route(ops: &PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -> (u8, usize) {
+fn bridge_route(ops: &PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -> u8 {
     ops.write8(&dev.bdf, Register::PrimaryBus as u16, this_bus);
     ops.write8(&dev.bdf, Register::SecondaryBus as u16, next_bus);
 
@@ -1015,18 +1015,12 @@ fn bridge_route(ops: &PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -
     // Recursively scan the new bus and absorb its highest sub bus number
     let new_primary = next_bus;
     let new_secondary = next_bus + 1;
-    let (subordinate, bridges_found) = bridge_hierarchy(new_primary, ops, new_secondary);
-
-    let subordinate = if bridges_found == 0 {
-        subordinate - 1
-    } else {
-        subordinate
-    };
+    let subordinate = bridge_hierarchy(new_primary, ops, new_secondary);
 
     // Now set the new max bus number for this bridge
     ops.write8(&dev.bdf, Register::SubordinateBus as u16, subordinate);
 
-    (subordinate, bridges_found)
+    subordinate
 }
 
 fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
@@ -1042,22 +1036,19 @@ fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
     ops.write8(&dev.bdf, Register::SubordinateBus as u16, 0xfe);
 }
 
-// Returns the subordinate bus number and how many bridges were found
-pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> (u8, usize) {
-    let start_bus = Bdf::from_bus(Bus(bus));
-    let mut next_bus = next_bus;
-    let end_bus = Bus(bus + 1);
-    let mut bridges = 0;
+// Returns the subordinate bus number
+pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> u8 {
+    let mut highest_bus = bus;
 
-    for device in DeviceIterator::new(start_bus, ops, end_bus) {
+    for device in all_local_devices(bus, ops) {
         if device.is_bridge() {
-            let (nbus, downstream_bridges) = bridge_route(ops, bus, next_bus, &device);
-            next_bus = nbus;
-            bridges += downstream_bridges + 1;
+            let next_bus = highest_bus + 1;
+            let highest_downstream = bridge_route(ops, bus, next_bus, &device);
+            highest_bus = u8::max(highest_bus, highest_downstream);
         }
     }
 
-    (next_bus, bridges)
+    highest_bus
 }
 
 // Closes a PCIe hierarchy from being enumerated
@@ -1089,6 +1080,11 @@ pub fn shallow_scan_for_device(
 // Scan as many devices as can be discovered starting at the provided `bus`.
 pub fn all_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
     DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, MAX_BUS)
+}
+
+/// Scan only the devices attached directly to the provided `bus`.
+pub fn all_local_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
+    DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, Bus(bus + 1))
 }
 
 #[derive(Copy, Clone)]
