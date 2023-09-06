@@ -518,7 +518,7 @@ impl<'a> Device<'a> {
             let (base, end) = if let Some(base) = resource.base {
                 (base, resource.limit)
             } else {
-                (resource.limit - resource.alignment, resource.limit)
+                (resource.limit, resource.limit - resource.alignment)
             };
 
             match resource.idx {
