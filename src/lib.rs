@@ -331,6 +331,18 @@ pub struct Bdf {
 }
 
 impl Bdf {
+    pub fn to_usize(bdf: &Bdf) -> usize {
+        (bdf.bus.val() as usize) << 8 | (bdf.dev.val() as usize) << 3 | (bdf.func.val() as usize)
+    }
+
+    pub fn from_usize(bdf: usize) -> Self {
+        Bdf {
+            bus: (((bdf >> 8) & 0xff) as u8).into(),
+            dev: (((bdf >> 3) & 0x1f) as u8).into(),
+            func: ((bdf & 0x7) as u8).into(),
+        }
+    }
+
     fn new(bus: Bus, dev: Dev, func: Func) -> Self {
         assert!(func <= MAX_FUNC);
         assert!(dev <= MAX_DEV);
