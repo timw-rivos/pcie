@@ -1091,8 +1091,8 @@ pub fn shallow_scan_for_device(
 }
 
 // Scan as many devices as can be discovered starting at the provided `bus`.
-pub fn all_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
-    DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, MAX_BUS)
+pub fn all_devices(bus: u8, ops: &PciEcamCfgOps, max_bus: Bus) -> DeviceIterator {
+    DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, max_bus)
 }
 
 /// Scan only the devices attached directly to the provided `bus`.
