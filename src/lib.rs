@@ -424,7 +424,7 @@ const BARS: [Register; 6] = [
 ];
 
 // Public fns
-impl<'a> Device<'a> {
+impl Device {
     pub fn cfg_read8(&self, register: u16) -> u8 {
         self.ops.read8(&self.bdf, register)
     }
@@ -660,7 +660,7 @@ impl<'a> Device<'a> {
 }
 
 // Private fns
-impl<'a> Device<'a> {
+impl Device {
     fn max_bars(&self) -> usize {
         match self.is_bridge() {
             true => 2,
@@ -916,7 +916,7 @@ impl<'a> Device<'a> {
         })
     }
 
-    fn probe(bdf: Bdf, ops: &'a PciEcamCfgOps) -> Option<Self> {
+    fn probe(bdf: Bdf, ops: &PciEcamCfgOps) -> Option<Self> {
         let device_id = ops.read16(&bdf, Register::DeviceId as u16);
         let vendor_id = ops.read16(&bdf, Register::VendorId as u16);
 
@@ -938,7 +938,7 @@ impl<'a> Device<'a> {
         let revision = ops.read8(&bdf, Register::RevisionId as u16);
 
         Some(Self {
-            ops,
+            ops: *ops,
             bdf,
             vendor_id,
             device_id,
@@ -973,7 +973,7 @@ impl<'a> DeviceIterator<'a> {
 }
 
 impl<'a> core::iter::Iterator for DeviceIterator<'a> {
-    type Item = Device<'a>;
+    type Item = Device;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -1101,8 +1101,8 @@ pub fn all_local_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Device<'a> {
-    ops: &'a PciEcamCfgOps,
+pub struct Device {
+    ops: PciEcamCfgOps,
     pub bdf: Bdf,
     pub resources: [Option<Resource>; 6],
     pub header: HeaderType,
