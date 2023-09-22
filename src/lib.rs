@@ -4,8 +4,6 @@
 
 #![cfg_attr(not(test), no_std)]
 
-use core::sync::atomic::{AtomicUsize, Ordering};
-
 // BAR Attributes
 const BAR_ATTRIBUTES_MASK: u64 = 0xf;
 const BASE_ADDRESS_MASK: u64 = 0x1;
@@ -142,30 +140,19 @@ pub struct Resource {
     pub bridge: bool,
 }
 
+#[derive(Copy, Clone)]
 pub struct PciEcamCfgOps {
     pub segment_id: usize,
-    base: AtomicUsize,
+    base: usize,
 }
 
 impl PciEcamCfgOps {
     pub const fn new(segment_id: usize, base: usize) -> Self {
-        Self {
-            segment_id,
-            base: AtomicUsize::new(base as usize),
-        }
-    }
-
-    /// # Safety
-    ///
-    /// It is up to the user to ensure that the same PCIe ECAM region
-    /// was actually moved in some platform-specific manner.
-    pub unsafe fn rebase(&self, new_base: *mut u8) {
-        self.base.store(new_base as usize, Ordering::Release);
+        Self { segment_id, base }
     }
 
     fn addr(&self, bdf: &Bdf, register: u16) -> usize {
         self.base
-            .load(Ordering::Acquire)
             .wrapping_add((bdf.bus.val() as usize) << 20)
             .wrapping_add((bdf.dev.val() as usize) << 15)
             .wrapping_add((bdf.func.val() as usize) << 12)
