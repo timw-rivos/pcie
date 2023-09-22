@@ -157,6 +157,10 @@ impl PciEcamCfgOps {
         Self { segment_id, base }
     }
 
+    unsafe fn rebase(&mut self, new_base: *mut u8) {
+        self.base = new_base as usize;
+    }
+
     fn addr(&self, bdf: &Bdf, register: u16) -> usize {
         self.base
             .wrapping_add((bdf.bus.val() as usize) << 20)
@@ -445,6 +449,10 @@ impl Device {
     }
     pub fn resources(&self) -> &[Option<Resource>; 6] {
         &self.resources
+    }
+
+    unsafe fn rebase(&mut self, new_base: *mut u8) {
+        self.ops.rebase(new_base);
     }
 
     // flatten() doesn't return mutable data
