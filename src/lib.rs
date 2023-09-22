@@ -451,8 +451,14 @@ impl Device {
         &self.resources
     }
 
-    unsafe fn rebase(&mut self, new_base: *mut u8) {
-        self.ops.rebase(new_base);
+    // Passed in value is new base for this device, so it must be rebased back to the ECAM base
+    // for the segment for that to work properly.
+    pub unsafe fn rebase(&mut self, new_dev_base: *mut u8) {
+        let dev_offset = (self.bdf.bus.0 as usize) << 20
+            | (self.bdf.dev.0 as usize) << 15
+            | (self.bdf.func.0 as usize) << 12;
+        let ecam_base = new_dev_base.sub(dev_offset);
+        self.ops.rebase(ecam_base);
     }
 
     // flatten() doesn't return mutable data
