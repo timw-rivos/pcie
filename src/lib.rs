@@ -27,6 +27,7 @@ const MAX_DEV: Dev = Dev(31);
 const MAX_FUNC: Func = Func(7);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(usize)]
 pub enum Description {
     Unknown,
     HostBridge,
@@ -37,6 +38,7 @@ pub enum Description {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[repr(C)]
 pub struct DeviceInfo {
     pub desc: Description,
     pub class: ClassCode,
@@ -68,6 +70,7 @@ impl DeviceInfo {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum ClassCode {
     Unknown,
     MassStorage,
@@ -121,6 +124,7 @@ impl From<u8> for ClassCode {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[repr(usize)]
 pub enum ResourceType {
     Io,
     Memory32,
@@ -128,6 +132,7 @@ pub enum ResourceType {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[repr(C)]
 pub struct Resource {
     pub bdf: Bdf,
     idx: Register,
@@ -141,6 +146,7 @@ pub struct Resource {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct PciEcamCfgOps {
     pub segment_id: usize,
     base: usize,
@@ -186,6 +192,7 @@ impl PciEcamCfgOps {
 
 // Add some newtypes to these raw numbers so we can't mix these up
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[repr(C)]
 pub struct Bus(u8);
 
 impl Bus {
@@ -201,6 +208,7 @@ impl From<u8> for Bus {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[repr(C)]
 pub struct Func(u8);
 
 impl Func {
@@ -216,6 +224,7 @@ impl From<u8> for Func {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[repr(C)]
 pub struct Dev(u8);
 
 impl Dev {
@@ -232,6 +241,7 @@ impl From<u8> for Dev {
 
 // PCI header types
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(u8)]
 pub enum HeaderType {
     Normal = 0,
     Bridge = 1,
@@ -252,6 +262,7 @@ impl TryFrom<u8> for HeaderType {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(usize)]
 pub enum Register {
     VendorId = 0,
     DeviceId = 2,
@@ -311,6 +322,7 @@ const SUBCLASS_OFFSET: u16 = Register::ClassCode as u16 + 1;
 const PROG_IF_OFFSET: u16 = Register::ClassCode as u16;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
 pub struct Bdf {
     pub bus: Bus,
     pub dev: Dev,
@@ -1088,6 +1100,7 @@ pub fn all_local_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Device<'a> {
     ops: &'a PciEcamCfgOps,
     pub bdf: Bdf,
