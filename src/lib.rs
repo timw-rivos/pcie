@@ -551,13 +551,6 @@ impl Device {
     }
 
     pub fn enable_resources(&self) {
-        if self
-            .probe_capability(CapabilityId::ExtendedAllocation)
-            .is_some()
-        {
-            return;
-        }
-
         let mut val: u16 = 0;
         for res in self.resources.iter().flatten() {
             val |= match res.ty {
