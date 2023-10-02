@@ -1047,7 +1047,13 @@ fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
     // the way back down the tree.
 
     let secondary = ops.read8(&dev.bdf, Register::SecondaryBus as u16);
-    close_hierarchy(secondary, ops);
+    let subordinate = ops.read8(&dev.bdf, Register::SecondaryBus as u16);
+
+    if subordinate != 0 {
+        for bus in secondary..=subordinate {
+            close_hierarchy(bus, ops);
+        }
+    }
 
     ops.write8(&dev.bdf, Register::PrimaryBus as u16, 0);
     ops.write8(&dev.bdf, Register::SecondaryBus as u16, 0xff);
@@ -1072,10 +1078,7 @@ pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> u8 {
 
 // Closes a PCIe hierarchy from being enumerated
 pub fn close_hierarchy(bus: u8, ops: &PciEcamCfgOps) {
-    let end_bus = MAX_BUS;
-    let start_bus = Bdf::from_bus(Bus(bus));
-
-    for device in DeviceIterator::new(start_bus, ops, end_bus) {
+    for device in all_local_devices(bus, ops) {
         if device.is_bridge() {
             close_bridge(ops, &device);
         }
