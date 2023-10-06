@@ -1047,7 +1047,7 @@ fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
     // the way back down the tree.
 
     let secondary = ops.read8(&dev.bdf, Register::SecondaryBus as u16);
-    let subordinate = ops.read8(&dev.bdf, Register::SecondaryBus as u16);
+    let subordinate = ops.read8(&dev.bdf, Register::SubordinateBus as u16);
 
     if subordinate != 0 {
         for bus in secondary..=subordinate {
