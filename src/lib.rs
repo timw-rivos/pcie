@@ -123,7 +123,7 @@ impl From<u8> for ClassCode {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(usize)]
 pub enum ResourceType {
     Io,
@@ -131,7 +131,7 @@ pub enum ResourceType {
     Memory64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(C)]
 pub struct Resource {
     pub bdf: Bdf,
@@ -195,7 +195,7 @@ impl PciEcamCfgOps {
 }
 
 // Add some newtypes to these raw numbers so we can't mix these up
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq)]
 #[repr(C)]
 pub struct Bus(u8);
 
@@ -211,7 +211,7 @@ impl From<u8> for Bus {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq)]
 #[repr(C)]
 pub struct Func(u8);
 
@@ -227,7 +227,7 @@ impl From<u8> for Func {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq)]
 #[repr(C)]
 pub struct Dev(u8);
 
@@ -325,7 +325,7 @@ const CLASS_CODE_OFFSET: u16 = Register::ClassCode as u16 + 2;
 const SUBCLASS_OFFSET: u16 = Register::ClassCode as u16 + 1;
 const PROG_IF_OFFSET: u16 = Register::ClassCode as u16;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Bdf {
     pub bus: Bus,
