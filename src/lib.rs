@@ -393,6 +393,12 @@ pub struct PcieExtCap {
     pub base_register: u16,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Dvsec {
+    pub revision: u8,
+    pub base_register: u16,
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum CapabilityId {
@@ -415,6 +421,7 @@ pub enum ExtendedCapabilityId {
     Ltr = 0x18,
     Secondary = 0x19,
     L1PmSubstates = 0x1e,
+    Dvsec = 0x23,
     Doe = 0x2e,
 }
 
@@ -657,6 +664,51 @@ impl Device {
                     version: version(cap),
                     base_register: current_offset,
                 });
+            }
+
+            current_offset = next_offset(cap);
+        }
+
+        None
+    }
+
+    pub fn probe_dvsec(&self, vendor_id: u16, dvsec_id: u16) -> Option<Dvsec> {
+        fn ext_cap_id(cap: u32) -> u16 {
+            (cap & 0xffff) as u16
+        }
+        fn next_offset(cap: u32) -> u16 {
+            (cap >> 20 & 0xffc) as u16
+        }
+        fn revision(header1: u32) -> u8 {
+            ((header1 >> 16) & 0xf) as u8
+        }
+        fn vid(header1: u32) -> u16 {
+            (header1 & 0xffff) as u16
+        }
+        fn dvid(header2: u32) -> u16 {
+            (header2 & 0xffff) as u16
+        }
+
+        let mut current_offset = Register::ExtendedCapHeader as u16;
+        while current_offset != 0 {
+            let cap = self.cfg_read32(current_offset);
+            if cap == u32::MAX {
+                return None;
+            }
+
+            if ext_cap_id(cap) == ExtendedCapabilityId::Dvsec as u16 {
+                let header1 = self.cfg_read32(current_offset + 4);
+                let cap_vendor_id = vid(header1);
+                if vendor_id == cap_vendor_id {
+                    let header2 = self.cfg_read32(current_offset + 8);
+                    let cap_dvsec_id = dvid(header2);
+                    if dvsec_id == cap_dvsec_id {
+                        return Some(Dvsec {
+                            revision: revision(header1),
+                            base_register: current_offset,
+                        });
+                    }
+                }
             }
 
             current_offset = next_offset(cap);
