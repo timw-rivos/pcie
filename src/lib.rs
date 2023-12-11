@@ -417,6 +417,7 @@ pub enum ExtendedCapabilityId {
     Aer = 0x1,
     VendorSpecific = 0x9,
     Acs = 0xd,
+    Ats = 0xf,
     ResizableBar = 0x15,
     Ltr = 0x18,
     Secondary = 0x19,
