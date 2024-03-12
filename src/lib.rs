@@ -397,6 +397,7 @@ pub struct PcieExtCap {
 pub struct Dvsec {
     pub revision: u8,
     pub base_register: u16,
+    pub length: u16,
 }
 
 #[repr(u8)]
@@ -680,6 +681,9 @@ impl Device {
         fn next_offset(cap: u32) -> u16 {
             (cap >> 20 & 0xffc) as u16
         }
+        fn length(header1: u32) -> u16 {
+            ((header1 >> 20) & 0xfff) as u16
+        }
         fn revision(header1: u32) -> u8 {
             ((header1 >> 16) & 0xf) as u8
         }
@@ -707,6 +711,7 @@ impl Device {
                         return Some(Dvsec {
                             revision: revision(header1),
                             base_register: current_offset,
+                            length: length(header1),
                         });
                     }
                 }
