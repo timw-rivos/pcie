@@ -1041,6 +1041,9 @@ impl<'a> core::iter::Iterator for DeviceIterator<'a> {
                 return None;
             }
 
+            #[cfg(feature = "log")]
+            log::info!("About to probe {:?}", self.bdf);
+
             let dev = Device::probe(self.bdf, self.ops);
 
             // Check for multi-function device if this is function 0
