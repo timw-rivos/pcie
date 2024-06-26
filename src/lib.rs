@@ -1170,6 +1170,11 @@ pub fn all_local_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
     DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, Bus(bus + 1))
 }
 
+/// Probe for a device at the given BDF
+pub fn probe_device(ops: &PciEcamCfgOps, bus: Bus, dev: Dev, func: Func) -> Option<Device> {
+    Device::probe(Bdf { bus, dev, func }, ops)
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Device {
