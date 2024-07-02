@@ -470,6 +470,10 @@ impl Device {
         self.ops.rebase(ecam_base);
     }
 
+    pub fn ecam_base(&self) -> usize {
+        self.ops.addr(&self.bdf, 0)
+    }
+
     // flatten() doesn't return mutable data
     #[allow(clippy::manual_flatten)]
     // Set the base of a given resource (in memory only)
