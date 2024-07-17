@@ -468,8 +468,11 @@ impl Device {
         self.cfg_write16(Register::Command as u16, cmd);
     }
 
-    // Passed in value is new base for this device, so it must be rebased back to the ECAM base
-    // for the segment for that to work properly.
+    /// Passed in value is new base for this device, so it must be
+    /// rebased back to the ECAM base for the segment for that to work properly.
+    ///
+    /// # Safety
+    /// It is up to the user to ensure that the new base passed in is correct.
     pub unsafe fn rebase(&mut self, new_dev_base: *mut u8) {
         let dev_offset = (self.bdf.bus.0 as usize) << 20
             | (self.bdf.dev.0 as usize) << 15
@@ -489,12 +492,10 @@ impl Device {
         let mut assigned = false;
 
         for resource in &mut self.resources {
-            if resource.is_some() {
-                if res.idx == resource.unwrap().idx {
-                    *resource = Some(*res);
-                    assigned = true;
-                    break;
-                }
+            if resource.is_some() && res.idx == resource.unwrap().idx {
+                *resource = Some(*res);
+                assigned = true;
+                break;
             }
         }
 
