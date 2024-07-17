@@ -459,6 +459,14 @@ impl Device {
     pub fn resources(&self) -> &[Option<Resource>; 6] {
         &self.resources
     }
+    pub fn set_bus_master_enable(&self, value: bool) {
+        let mut cmd = self.cfg_read16(Register::Command as u16);
+        cmd &= !PCI_COMMAND_BUS_MASTER;
+        if value {
+            cmd |= PCI_COMMAND_BUS_MASTER;
+        }
+        self.cfg_write16(Register::Command as u16, cmd);
+    }
 
     // Passed in value is new base for this device, so it must be rebased back to the ECAM base
     // for the segment for that to work properly.
