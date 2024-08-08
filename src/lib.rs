@@ -4,6 +4,11 @@
 
 #![cfg_attr(not(test), no_std)]
 
+use arrayvec::ArrayString;
+use core::fmt::Write;
+#[cfg(feature = "log")]
+use log;
+
 // BAR Attributes
 const BAR_ATTRIBUTES_MASK: u64 = 0xf;
 const BASE_ADDRESS_MASK: u64 = 0x1;
@@ -735,6 +740,46 @@ impl Device {
 
         None
     }
+
+    #[cfg(feature = "log")]
+    /// Prints the PCI configuration space in a structured format similar to `lspci -x`.
+    ///
+    /// # Example Output
+    ///
+    /// 00:19.00 Ethernet Vendor:10EC Device:8168 (rev 10)
+    /// 00: 1a bc 3d e4 ...
+    /// 10: 4f 5a 1b 3c ...
+    ///
+    pub fn print_pci_config_space(&self) {
+        let mut buf = ArrayString::<300>::new();
+
+        let _ = write!(
+            buf,
+            "\n{:02X}:{:02X}.{:02X} {:?} Vendor:{:02X} Device:{:02X} (rev {})",
+            self.bdf.bus.val(),
+            self.bdf.dev.val(),
+            self.bdf.func.val(),
+            self.device_info.desc,
+            self.vendor_id,
+            self.device_id,
+            self.revision,
+        );
+
+        for i in 0..64 {
+            let value = if cfg!(test) {
+                0x0 + i % 0xff
+            } else {
+                self.cfg_read8(i as u16)
+            };
+
+            if i % 16 == 0 {
+                let _ = write!(buf, "\n{:02x}: ", i);
+            }
+            let _ = write!(buf, "{:02x} ", value);
+        }
+        let _ = write!(buf, "\n");
+        log::info!("{}", buf);
+    }
 }
 
 // Private fns
@@ -1204,6 +1249,8 @@ pub struct Device {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use env_logger;
+    use log::LevelFilter;
 
     #[test]
     fn test_bdf() {
@@ -1226,5 +1273,29 @@ mod tests {
 
         let b = Bdf::new(Bus(255), Dev(31), Func(7));
         assert_eq!(b.next(), None);
+    }
+
+    #[test]
+    fn test_log() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(LevelFilter::Info)
+            .try_init();
+
+        let device: Device = Device {
+            ops: PciEcamCfgOps {
+                segment_id: 0xA0FF,
+                base: 0x0000,
+            },
+            bdf: Bdf::new(Bus(0), Dev(0), Func(2)),
+            resources: [None; 6],
+            header: HeaderType::Normal,
+            vendor_id: 0x4,
+            device_id: 0xc,
+            device_info: DeviceInfo::new(1, 8, 2),
+            revision: 2,
+        };
+
+        device.print_pci_config_space();
     }
 }

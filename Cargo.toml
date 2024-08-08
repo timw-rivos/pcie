@@ -10,3 +10,10 @@ edition = "2021"
 [dependencies]
 # implicitly defines a feature like "dep:log"
 log = { version = "0.4.14", default-features = false, optional = true }
+arrayvec = "*"
+
+[features]
+default = ["log"]
+
+[dev-dependencies]
+env_logger = "0.9"
