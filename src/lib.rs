@@ -6,8 +6,10 @@
 
 use arrayvec::ArrayString;
 use core::fmt::Write;
-#[cfg(feature = "log")]
-use log;
+
+//PCI config space size
+const PCI_STD_SIZE: usize = 256;
+const PCIE_CONFIG_SIZE: usize = 4096;
 
 // BAR Attributes
 const BAR_ATTRIBUTES_MASK: u64 = 0xf;
@@ -742,7 +744,7 @@ impl Device {
     }
 
     #[cfg(feature = "log")]
-    /// Prints the PCI configuration space in a structured format similar to `lspci -x`.
+    /// Prints the first 64 bytes of PCI configuration space in a structured format similar to `lspci -x`.
     ///
     /// # Example Output
     ///
@@ -750,35 +752,30 @@ impl Device {
     /// 00: 1a bc 3d e4 ...
     /// 10: 4f 5a 1b 3c ...
     ///
-    pub fn print_pci_config_space(&self) {
-        let mut buf = ArrayString::<300>::new();
+    pub fn print_std_config_space(&self) {
+        self.print_config_space_bytes(64);
+    }
 
-        let _ = write!(
-            buf,
-            "\n{:02X}:{:02X}.{:02X} {:?} Vendor:{:02X} Device:{:02X} (rev {})",
-            self.bdf.bus.val(),
-            self.bdf.dev.val(),
-            self.bdf.func.val(),
-            self.device_info.desc,
-            self.vendor_id,
-            self.device_id,
-            self.revision,
-        );
-
-        for i in 0..64 {
-            let value = if cfg!(test) {
-                0x0 + i % 0xff
+    #[cfg(feature = "log")]
+    /// Prints full PCI configuration space in a structured format similar to `lspci -x`.
+    /// It will print 256 bytes for standard PCI Device, and it will print 4096 bytes for
+    /// PCIe devices.
+    ///
+    /// # Example Output
+    ///
+    /// 00:19.00 Ethernet Vendor:10EC Device:8168 (rev 10)
+    /// 00: 1a bc 3d e4 ...
+    /// 10: 4f 5a 1b 3c ...
+    ///
+    pub fn print_full_config_space(&self) {
+        let max_config_space =
+            if cfg!(test) || self.probe_capability(CapabilityId::PciExpress).is_some() {
+                PCIE_CONFIG_SIZE
             } else {
-                self.cfg_read8(i as u16)
+                PCI_STD_SIZE
             };
 
-            if i % 16 == 0 {
-                let _ = write!(buf, "\n{:02x}: ", i);
-            }
-            let _ = write!(buf, "{:02x} ", value);
-        }
-        let _ = write!(buf, "\n");
-        log::info!("{}", buf);
+        self.print_config_space_bytes(max_config_space);
     }
 }
 
@@ -1075,6 +1072,40 @@ impl Device {
     pub fn is_bridge(&self) -> bool {
         self.header == HeaderType::Bridge
     }
+
+    fn print_config_space_bytes(&self, num_bytes: usize) {
+        const BUFFER_SIZE: usize = 100;
+        let mut buf = ArrayString::<BUFFER_SIZE>::new();
+
+        log::info!(target: "",
+            "{:02X}:{:02X}.{:02X} {:?} Vendor:{:02X} Device:{:02X} (rev {})",
+                self.bdf.bus.val(),
+                self.bdf.dev.val(),
+                self.bdf.func.val(),
+                self.device_info.desc,
+                self.vendor_id,
+                self.device_id,
+                self.revision,
+        );
+
+        for i in 0..num_bytes {
+            let value = if cfg!(test) {
+                (i % 0xff) as u8
+            } else {
+                self.cfg_read8(i as u16)
+            };
+
+            if i % 16 == 0 {
+                if i != 0 {
+                    log::info!("{}", buf);
+                    buf.clear();
+                }
+                let _ = write!(buf, "{:02x}: ", i);
+            }
+            let _ = write!(buf, "{:02x} ", value);
+        }
+        let _ = writeln!(buf);
+    }
 }
 
 pub struct DeviceIterator<'a> {
@@ -1274,7 +1305,6 @@ mod tests {
         let b = Bdf::new(Bus(255), Dev(31), Func(7));
         assert_eq!(b.next(), None);
     }
-
     #[test]
     fn test_log() {
         let _ = env_logger::builder()
@@ -1295,7 +1325,10 @@ mod tests {
             device_info: DeviceInfo::new(1, 8, 2),
             revision: 2,
         };
+        log::info!("Printing Standard Config Space");
+        device.print_std_config_space();
 
-        device.print_pci_config_space();
+        log::info!("Printing Full Config Space");
+        device.print_full_config_space();
     }
 }
