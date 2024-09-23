@@ -1074,7 +1074,7 @@ impl Device {
     }
 
     fn print_config_space_bytes(&self, num_bytes: usize) {
-        const BUFFER_SIZE: usize = 100;
+        const BUFFER_SIZE: usize = 70;
         let mut buf = ArrayString::<BUFFER_SIZE>::new();
 
         log::info!(target: "",
