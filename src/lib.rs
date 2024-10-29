@@ -1141,7 +1141,7 @@ impl<'a> core::iter::Iterator for DeviceIterator<'a> {
             }
 
             #[cfg(feature = "log")]
-            log::info!("About to probe {:?}", self.bdf);
+            log::trace!("About to probe {:?}", self.bdf);
 
             let dev = Device::probe(self.bdf, self.ops);
 
