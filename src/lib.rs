@@ -1080,6 +1080,7 @@ impl Device {
         const BUFFER_SIZE: usize = 70;
         let mut buf = ArrayString::<BUFFER_SIZE>::new();
 
+        #[cfg(feature = "log")]
         log::info!(target: "",
             "{:02X}:{:02X}.{:02X} {:?} Vendor:{:02X} Device:{:02X} (rev {})",
                 self.bdf.bus.val(),
@@ -1100,6 +1101,7 @@ impl Device {
 
             if i % 16 == 0 {
                 if i != 0 {
+                    #[cfg(feature = "log")]
                     log::info!("{}", buf);
                     buf.clear();
                 }
