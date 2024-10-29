@@ -560,7 +560,10 @@ impl Device {
             let (base, end) = if let Some(base) = resource.base {
                 (base, resource.limit)
             } else {
-                (resource.limit, resource.limit - resource.alignment)
+                (
+                    resource.limit,
+                    resource.limit - (1u64 << resource.alignment),
+                )
             };
 
             match resource.idx {
