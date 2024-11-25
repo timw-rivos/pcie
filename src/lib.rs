@@ -407,6 +407,152 @@ pub struct Dvsec {
     pub length: u16,
 }
 
+// Allows configuration of message signalled interrupts (MSI)
+pub struct Msi<'a> {
+    device: &'a Device,
+    base_register: u16,
+}
+
+impl Msi<'_> {
+    const CTRL_OFFSET: u16 = 2;
+    const CTRL_MSI_ENABLE: u16 = 0x1;
+    const CTRL_MULTI_MSG_CAPABLE_SHIFT: u16 = 1;
+    const CTRL_MULTI_MSG_CAPABLE_MASK: u16 = 0xe;
+    const CTRL_MULTI_MSG_ENABLE_SHIFT: u16 = 4;
+    const CTRL_SUPPORTS_64B_ADDRESS_MASK: u16 = 1 << 7;
+    const CTRL_PER_VECTOR_MASKING_MASK: u16 = 1 << 8;
+    const CTRL_EXTENDED_MSG_DATA_CAPABLE_MASK: u16 = 1 << 9;
+    const CTRL_EXTENDED_MSG_DATA_ENABLE_MASK: u16 = 1 << 10;
+    const MSG_ADDR_OFFSET: u16 = 4;
+    const MSG_ADDR_UPPER_OFFSET: u16 = 8;
+
+    pub fn enable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val |= Self::CTRL_MSI_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+
+    pub fn disable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val &= !Self::CTRL_MSI_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+
+    pub fn vector_support(&self) -> usize {
+        let val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        let val = (val & Self::CTRL_MULTI_MSG_CAPABLE_MASK) >> Self::CTRL_MULTI_MSG_CAPABLE_SHIFT;
+        1 << val as usize
+    }
+
+    pub fn set_vectors(&self, vectors: usize) {
+        const VALID: [usize; 6] = [1, 2, 4, 8, 16, 32];
+        if VALID.contains(&vectors) {
+            let mut val = self
+                .device
+                .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+            val |= (vectors.ilog2() as u16) << Self::CTRL_MULTI_MSG_ENABLE_SHIFT;
+            self.device
+                .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+        }
+    }
+
+    pub fn supports_extended_msg(&self) -> bool {
+        let val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val & Self::CTRL_EXTENDED_MSG_DATA_CAPABLE_MASK != 0
+    }
+
+    pub fn supports_64b_address(&self) -> bool {
+        let val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val & Self::CTRL_SUPPORTS_64B_ADDRESS_MASK != 0
+    }
+
+    pub fn supports_per_vector_masking(&self) -> bool {
+        let val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val & Self::CTRL_PER_VECTOR_MASKING_MASK != 0
+    }
+
+    pub fn enable_extended_msg(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val |= Self::CTRL_EXTENDED_MSG_DATA_ENABLE_MASK;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+
+    pub fn set_message_address(&self, address: u32) {
+        self.device
+            .cfg_write32(self.base_register + Self::MSG_ADDR_OFFSET, address);
+    }
+
+    pub fn set_message_address64(&self, address: u64) {
+        let lower = address as u32;
+        self.device
+            .cfg_write32(self.base_register + Self::MSG_ADDR_OFFSET, lower);
+        let upper = (address >> 32) as u32;
+        self.device
+            .cfg_write32(self.base_register + Self::MSG_ADDR_UPPER_OFFSET, upper);
+    }
+
+    fn msg_data_register_offset(&self) -> u16 {
+        if self.supports_64b_address() {
+            0xc
+        } else {
+            0x8
+        }
+    }
+
+    fn mask_register_offset(&self) -> u16 {
+        if self.supports_64b_address() {
+            0x10
+        } else {
+            0xc
+        }
+    }
+
+    fn pending_register_offset(&self) -> u16 {
+        if self.supports_64b_address() {
+            0x14
+        } else {
+            0x10
+        }
+    }
+
+    pub fn set_message_data(&self, data: u16) {
+        let offset = self.msg_data_register_offset();
+        self.device.cfg_write16(self.base_register + offset, data);
+    }
+
+    pub fn set_message_data_extended(&self, data: u32) {
+        let offset = self.msg_data_register_offset();
+        self.device.cfg_write32(self.base_register + offset, data);
+    }
+
+    pub fn mask_vectors(&self, mask: u32) {
+        let offset = self.mask_register_offset();
+        self.device.cfg_write32(self.base_register + offset, mask);
+    }
+
+    pub fn pending_vectors(&self) -> u32 {
+        let offset = self.pending_register_offset();
+        self.device.cfg_read32(self.base_register + offset)
+    }
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum CapabilityId {
@@ -744,6 +890,13 @@ impl Device {
         }
 
         None
+    }
+
+    pub fn probe_msi(&self) -> Option<Msi> {
+        self.probe_capability(CapabilityId::Msi).map(|cap| Msi {
+            device: self,
+            base_register: cap.base_register,
+        })
     }
 
     #[cfg(feature = "log")]
