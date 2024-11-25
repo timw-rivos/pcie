@@ -553,6 +553,73 @@ impl Msi<'_> {
     }
 }
 
+// Allows configuration of address translation services (ATS)
+pub struct Ats<'a> {
+    device: &'a Device,
+    base_register: u16,
+}
+
+impl Ats<'_> {
+    const CAPABILITY_OFFSET: u16 = 4;
+    const CAPABILITY_INVALIDATE_QUEUE_MASK: u16 = 0x1f;
+    const CTRL_OFFSET: u16 = 6;
+    const CTRL_ENABLE: u16 = 1 << 15;
+
+    pub fn invalidate_queue_depth(&self) -> u16 {
+        let val = self
+            .device
+            .cfg_read16(self.base_register + Self::CAPABILITY_OFFSET);
+        val & Self::CAPABILITY_INVALIDATE_QUEUE_MASK
+    }
+
+    pub fn enable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val |= Self::CTRL_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+
+    pub fn disable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val &= !Self::CTRL_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+}
+
+// Allows configuration of page request interface (PRI)
+pub struct Pri<'a> {
+    device: &'a Device,
+    base_register: u16,
+}
+
+impl Pri<'_> {
+    const CTRL_OFFSET: u16 = 4;
+    const CTRL_ENABLE: u16 = 1 << 0;
+
+    pub fn enable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val |= Self::CTRL_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+
+    pub fn disable(&self) {
+        let mut val = self
+            .device
+            .cfg_read16(self.base_register + Self::CTRL_OFFSET);
+        val &= !Self::CTRL_ENABLE;
+        self.device
+            .cfg_write16(self.base_register + Self::CTRL_OFFSET, val);
+    }
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum CapabilityId {
@@ -572,6 +639,7 @@ pub enum ExtendedCapabilityId {
     VendorSpecific = 0x9,
     Acs = 0xd,
     Ats = 0xf,
+    Pri = 0x13,
     ResizableBar = 0x15,
     Ltr = 0x18,
     Secondary = 0x19,
@@ -897,6 +965,22 @@ impl Device {
             device: self,
             base_register: cap.base_register,
         })
+    }
+
+    pub fn probe_ats(&self) -> Option<Ats> {
+        self.probe_extended_capability(ExtendedCapabilityId::Ats)
+            .map(|cap| Ats {
+                device: self,
+                base_register: cap.base_register,
+            })
+    }
+
+    pub fn probe_pri(&self) -> Option<Pri> {
+        self.probe_extended_capability(ExtendedCapabilityId::Pri)
+            .map(|cap| Pri {
+                device: self,
+                base_register: cap.base_register,
+            })
     }
 
     #[cfg(feature = "log")]
