@@ -1009,13 +1009,6 @@ impl Device {
             0xffff
         };
 
-        // Ensure minimum alignment for memory resources is a page
-        // TODO: this logic should probably go in the resource
-        // allocator.
-        //if is_mem && align < 12 {
-        //align = 12;
-        //}
-
         let ty = if is_mem {
             if attr & MEM_LIMIT_MASK == MEM_LIMIT_64 {
                 ResourceType::Memory64
