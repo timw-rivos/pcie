@@ -1484,6 +1484,17 @@ pub fn shallow_scan_for_device(
         .find(|&device| device.vendor_id == vendor_id && device.device_id == device_id)
 }
 
+pub fn get_pci_device_iter(
+    bus: u8,
+    ops: &PciEcamCfgOps,
+    vendor_id: u16,
+    device_id: u16,
+) -> DeviceIterator {
+    let start_bus = Bdf::from_bus(Bus(bus));
+    let end_bus = Bus(bus + 1);
+    DeviceIterator::new(start_bus, ops, end_bus)
+}
+
 // Scan as many devices as can be discovered starting at the provided `bus`.
 pub fn all_devices(bus: u8, ops: &PciEcamCfgOps, max_bus: Bus) -> DeviceIterator {
     DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, max_bus)
