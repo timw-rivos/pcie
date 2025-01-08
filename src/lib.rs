@@ -1343,15 +1343,15 @@ impl Device {
     }
 }
 
-pub struct DeviceIterator<'a> {
+pub struct DeviceIterator {
     bdf: Bdf,
-    ops: &'a PciEcamCfgOps,
+    ops: PciEcamCfgOps,
     max_bus: Bus,
     done: bool,
 }
 
-impl<'a> DeviceIterator<'a> {
-    fn new(bdf: Bdf, ops: &'a PciEcamCfgOps, max_bus: Bus) -> Self {
+impl DeviceIterator {
+    fn new(bdf: Bdf, ops: PciEcamCfgOps, max_bus: Bus) -> Self {
         Self {
             bdf,
             ops,
@@ -1361,7 +1361,7 @@ impl<'a> DeviceIterator<'a> {
     }
 }
 
-impl<'a> core::iter::Iterator for DeviceIterator<'a> {
+impl core::iter::Iterator for DeviceIterator {
     type Item = Device;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1373,7 +1373,7 @@ impl<'a> core::iter::Iterator for DeviceIterator<'a> {
             #[cfg(feature = "log")]
             log::trace!("About to probe {:?}", self.bdf);
 
-            let dev = Device::probe(self.bdf, self.ops);
+            let dev = Device::probe(self.bdf, &self.ops);
 
             // Check for multi-function device if this is function 0
             let mut skipped = false;
@@ -1406,7 +1406,7 @@ impl<'a> core::iter::Iterator for DeviceIterator<'a> {
     }
 }
 
-fn bridge_route(ops: &PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -> u8 {
+fn bridge_route(ops: PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -> u8 {
     ops.write8(&dev.bdf, Register::PrimaryBus as u16, this_bus);
     ops.write8(&dev.bdf, Register::SecondaryBus as u16, next_bus);
 
@@ -1426,7 +1426,7 @@ fn bridge_route(ops: &PciEcamCfgOps, this_bus: u8, next_bus: u8, dev: &Device) -
     subordinate
 }
 
-fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
+fn close_bridge(ops: PciEcamCfgOps, dev: &Device) {
     // Closing off of the hierarchy must be done in reverse order,
     // so it is a depth-first traversal that closes off bridges on
     // the way back down the tree.
@@ -1446,7 +1446,7 @@ fn close_bridge(ops: &PciEcamCfgOps, dev: &Device) {
 }
 
 // Returns the subordinate bus number
-pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> u8 {
+pub fn bridge_hierarchy(bus: u8, ops: PciEcamCfgOps, next_bus: u8) -> u8 {
     let mut highest_bus = bus;
     let mut next_bus = next_bus;
 
@@ -1462,7 +1462,7 @@ pub fn bridge_hierarchy(bus: u8, ops: &PciEcamCfgOps, next_bus: u8) -> u8 {
 }
 
 // Closes a PCIe hierarchy from being enumerated
-pub fn close_hierarchy(bus: u8, ops: &PciEcamCfgOps) {
+pub fn close_hierarchy(bus: u8, ops: PciEcamCfgOps) {
     for device in all_local_devices(bus, ops) {
         if device.is_bridge() {
             close_bridge(ops, &device);
@@ -1473,7 +1473,7 @@ pub fn close_hierarchy(bus: u8, ops: &PciEcamCfgOps) {
 // Scan only the provided `bus` for a device with the matching `vendor_id` and `device_id`
 pub fn shallow_scan_for_device(
     bus: u8,
-    ops: &PciEcamCfgOps,
+    ops: PciEcamCfgOps,
     vendor_id: u16,
     device_id: u16,
 ) -> Option<Device> {
@@ -1485,18 +1485,18 @@ pub fn shallow_scan_for_device(
 }
 
 // Scan as many devices as can be discovered starting at the provided `bus`.
-pub fn all_devices(bus: u8, ops: &PciEcamCfgOps, max_bus: Bus) -> DeviceIterator {
+pub fn all_devices(bus: u8, ops: PciEcamCfgOps, max_bus: Bus) -> DeviceIterator {
     DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, max_bus)
 }
 
 /// Scan only the devices attached directly to the provided `bus`.
-pub fn all_local_devices(bus: u8, ops: &PciEcamCfgOps) -> DeviceIterator {
+pub fn all_local_devices(bus: u8, ops: PciEcamCfgOps) -> DeviceIterator {
     DeviceIterator::new(Bdf::from_bus(Bus(bus)), ops, Bus(bus + 1))
 }
 
 /// Probe for a device at the given BDF
-pub fn probe_device(ops: &PciEcamCfgOps, bus: Bus, dev: Dev, func: Func) -> Option<Device> {
-    Device::probe(Bdf { bus, dev, func }, ops)
+pub fn probe_device(ops: PciEcamCfgOps, bus: Bus, dev: Dev, func: Func) -> Option<Device> {
+    Device::probe(Bdf { bus, dev, func }, &ops)
 }
 
 #[derive(Copy, Clone)]
