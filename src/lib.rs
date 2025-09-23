@@ -797,7 +797,7 @@ impl Device {
     }
 
     pub fn enable_resources(&self) {
-        let mut val: u16 = 0;
+        let mut val: u16 = self.cfg_read16(Register::Command as u16);
         for res in self.resources.iter().flatten() {
             val |= match res.ty {
                 ResourceType::Io => PCI_COMMAND_IO,
@@ -819,10 +819,9 @@ impl Device {
         }
 
         // Clear the bus master, memory & io enable bits before reading BARs
-        self.cfg_write16(
-            Register::Command as u16,
-            !(PCI_COMMAND_BUS_MASTER | PCI_COMMAND_MEMORY | PCI_COMMAND_IO),
-        );
+        let mut cmd = self.cfg_read16(Register::Command as u16);
+        cmd &= !(PCI_COMMAND_BUS_MASTER | PCI_COMMAND_MEMORY | PCI_COMMAND_IO);
+        self.cfg_write16(Register::Command as u16, cmd);
 
         if self.is_bridge() {
             self.read_bridge_resources();
